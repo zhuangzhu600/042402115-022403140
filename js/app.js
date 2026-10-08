@@ -19,6 +19,7 @@ window.App = (function () {
     view: 'home',           // 当前视图：home/post/search/mine/detail/success
     tab: 'home',            // 当前底部导航
     selectedId: null,       // 详情页物品 id
+    detailFrom: 'home',     // 进入详情前的页面，用于返回定位
     homeFilter: 'all',      // 首页类型筛选
     postType: 'lost',
     postForm: { category: 'card', title: '', description: '', location: '', contact: '' },
@@ -31,6 +32,13 @@ window.App = (function () {
   /* ── 数据便捷访问 ───────────────────────────────────────── */
   function items() { return store.load(); }
   var clientId = store.getClientId();
+
+  function byId(id) {
+    var all = items();
+    for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
+    return null;
+  }
+  function isOwn(item) { return !!item && item.ownerId === clientId; }
 
   /* ── 共用 HTML 片段 ─────────────────────────────────────── */
 
@@ -96,7 +104,15 @@ window.App = (function () {
 
   function openDetail(id, from) {
     state.selectedId = id;
+    state.detailFrom = from || state.tab;
     state.view = 'detail';
+    render();
+  }
+
+  function goBack() {
+    var to = state.detailFrom || 'home';
+    state.view = to;
+    if (to === 'home' || to === 'post' || to === 'search' || to === 'mine') state.tab = to;
     render();
   }
 
@@ -372,8 +388,11 @@ window.App = (function () {
     registerPage: function (name, fn) { pages[name] = fn; },
     state: state,
     items: items,
+    byId: byId,
+    isOwn: isOwn,
     goTab: goTab,
     openDetail: openDetail,
+    goBack: goBack,
     render: render,
     cardHtml: cardHtml,
     bindCards: bindCards,
