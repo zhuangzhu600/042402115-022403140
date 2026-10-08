@@ -94,6 +94,40 @@ window.App = (function () {
     }
   }
 
+  /* ── 轻提示 ─────────────────────────────────────────────── */
+  var toastTimer = null;
+  function toast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { t.classList.add('hidden'); }, 2200);
+  }
+
+  /* ── 复制联系方式（附加特点） ────────────────────────────── */
+  function copyContact(text) {
+    function fallback() {
+      var ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      var ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      document.body.removeChild(ta);
+      if (ok) toast('联系方式已复制，快去联系对方吧');
+      else toast('复制失败，请长按或 Ctrl+C 手动复制');
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        toast('联系方式已复制，快去联系对方吧');
+      }, fallback);
+    } else {
+      fallback();
+    }
+  }
+
   /* ── 导航 ───────────────────────────────────────────────── */
 
   function goTab(t) {
@@ -173,7 +207,7 @@ window.App = (function () {
     var r = Core.createItem(state.postForm, state.postType, clientId);
     var p = store.add(r.item);
     if (!p.ok) {
-      alert(p.error);
+      toast(p.error);
       return;
     }
     state.postForm = { category: 'card', title: '', description: '', location: '', contact: '' };
@@ -393,6 +427,8 @@ window.App = (function () {
     goTab: goTab,
     openDetail: openDetail,
     goBack: goBack,
+    copyContact: copyContact,
+    toast: toast,
     render: render,
     cardHtml: cardHtml,
     bindCards: bindCards,

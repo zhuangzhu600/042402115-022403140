@@ -1,6 +1,7 @@
 /* ============================================================
  * pages/detail.js —— 物品详情页
- * 用物品 ID 从同一份数据里取，列表和详情不会出现两套内容。
+ * 用物品 ID 从同一份数据里取，列表和详情不会出现两套内容；
+ * 联系方式支持一键复制。
  * ============================================================ */
 App.registerPage('detail', function (root) {
   'use strict';
@@ -54,6 +55,7 @@ App.registerPage('detail', function (root) {
         '<p class="contact-kicker">联系发布者</p>' +
         '<div class="contact-row">' +
           '<p class="contact-text">' + Core.escapeHtml(item.contact) + '</p>' +
+          '<button class="btn-copy" id="d-copy">复制联系方式</button>' +
         '</div>' +
         '<p class="contact-tip">联系前请先核对物品特征，注意保护个人信息</p>' +
       '</div>' +
@@ -61,4 +63,7 @@ App.registerPage('detail', function (root) {
 
   root.querySelector('#d-back').addEventListener('click', App.goBack);
   root.querySelector('#d-home').addEventListener('click', function () { App.goTab('home'); });
+  root.querySelector('#d-copy').addEventListener('click', function () {
+    App.copyContact(item.contact);
+  });
 });
