@@ -20,12 +20,16 @@ window.App = (function () {
     tab: 'home',            // 当前底部导航
     selectedId: null,       // 详情页物品 id
     homeFilter: 'all',      // 首页类型筛选
+    postType: 'lost',
+    postForm: { category: 'card', title: '', description: '', location: '', contact: '' },
+    postErrors: {},
   };
 
   var pages = {}; // name -> function(rootEl)
 
   /* ── 数据便捷访问 ───────────────────────────────────────── */
   function items() { return store.load(); }
+  var clientId = store.getClientId();
 
   /* ── 共用 HTML 片段 ─────────────────────────────────────── */
 
@@ -141,6 +145,128 @@ window.App = (function () {
     bindCards(root, 'home');
   }
 
+  /* ── 发布提交 ───────────────────────────────────────────── */
+  function submitPost() {
+    var v = Core.validatePost(state.postForm);
+    if (!v.ok) {
+      state.postErrors = v.errors;
+      render();
+      return;
+    }
+    var r = Core.createItem(state.postForm, state.postType, clientId);
+    var p = store.add(r.item);
+    if (!p.ok) {
+      alert(p.error);
+      return;
+    }
+    state.postForm = { category: 'card', title: '', description: '', location: '', contact: '' };
+    state.postErrors = {};
+    goTab('home');
+  }
+
+  /* ── 发布页 ─────────────────────────────────────────────── */
+  function renderPost(root) {
+    var LOCATIONS = Core.LOCATIONS;
+    var f = state.postForm;
+    var type = state.postType;
+    var errs = state.postErrors;
+
+    var typeBtns = [
+      { id: 'lost', emoji: '\u{1F61F}', main: '我要寻物', sub: '我遗失了物品' },
+      { id: 'found', emoji: '\u{1F60A}', main: '我要招领', sub: '我拾到了物品' },
+    ].map(function (t) {
+      var cls = 'type-btn' + (type === t.id ? ' active ' + t.id : '');
+      return '<button class="' + cls + '" data-ptype="' + t.id + '">' +
+        '<span class="t-emoji">' + t.emoji + '</span>' +
+        '<span class="t-main">' + t.main + '</span>' +
+        '<span class="t-sub">' + t.sub + '</span></button>';
+    }).join('');
+
+    var catBtns = Object.keys(CATS).map(function (c) {
+      var cls = 'cat-btn' + (f.category === c ? ' active ' + type : '');
+      return '<button class="' + cls + '" data-cat="' + c + '">' +
+        '<span class="c-emoji">' + CATS[c].emoji + '</span>' +
+        '<span class="c-label">' + CATS[c].label + '</span></button>';
+    }).join('');
+
+    var locOptions = '<option value="">请选择地点…</option>' + LOCATIONS.map(function (l) {
+      return '<option value="' + escapeHtml(l) + '"' +
+        (f.location === l ? ' selected' : '') + '>' + escapeHtml(l) + '</option>';
+    }).join('');
+
+    function errMsg(key) {
+      return errs[key] ? '<p class="err-msg">' + escapeHtml(errs[key]) + '</p>' : '';
+    }
+    function errCls(key) { return errs[key] ? ' has-err' : ''; }
+
+    root.innerHTML =
+      '<div class="page-head">' +
+        '<h2 class="page-title" style="font-size:18px">发布信息</h2>' +
+        '<p class="page-sub">帮助校园里的物品回到主人身边</p>' +
+      '</div>' +
+      '<div class="scroll">' +
+        '<div><span class="field-label">信息类型</span>' +
+          '<div class="type-grid">' + typeBtns + '</div></div>' +
+        '<div><span class="field-label">物品分类</span>' +
+          '<div class="cat-grid">' + catBtns + '</div>' +
+          errMsg('category') + '</div>' +
+        '<div><span class="field-label">标题 *</span>' +
+          '<input id="f-title" class="input' + errCls('title') + '" type="text" maxlength="60" ' +
+            'placeholder="' + (type === 'lost' ? '例如：遗失蓝色校园卡' : '例如：图书馆附近拾到黑色钥匙') + '" ' +
+            'value="' + escapeHtml(f.title) + '">' +
+          errMsg('title') + '</div>' +
+        '<div><span class="field-label">物品描述</span>' +
+          '<textarea id="f-desc" class="textarea' + errCls('description') + '" rows="3" ' +
+            'placeholder="请描述物品颜色、品牌、特征和具体位置…">' + escapeHtml(f.description) + '</textarea>' +
+          errMsg('description') + '</div>' +
+        '<div><span class="field-label">地点 *</span>' +
+          '<select id="f-loc" class="select' + errCls('location') + '">' + locOptions + '</select>' +
+          errMsg('location') + '</div>' +
+        '<div><span class="field-label">联系方式 *</span>' +
+          '<input id="f-contact" class="input' + errCls('contact') + '" type="text" maxlength="60" ' +
+            'placeholder="微信号、手机号、QQ 等" value="' + escapeHtml(f.contact) + '">' +
+          errMsg('contact') + '</div>' +
+        '<button id="f-submit" class="btn ' + type + '">' +
+          (type === 'lost' ? '\u{1F4E2} 发布寻物信息' : '\u{1F4E2} 发布招领信息') +
+        '</button>' +
+        '<p class="form-hint">带 * 为必填项，联系方式仅在详情页展示</p>' +
+      '</div>';
+
+    // 输入只更新状态，不重渲染，避免丢失焦点
+    var ptBtns = root.querySelectorAll('[data-ptype]');
+    for (var i = 0; i < ptBtns.length; i++) {
+      (function (el) {
+        el.addEventListener('click', function () {
+          state.postType = el.getAttribute('data-ptype');
+          render();
+        });
+      })(ptBtns[i]);
+    }
+    var catBtnsEls = root.querySelectorAll('[data-cat]');
+    for (var j = 0; j < catBtnsEls.length; j++) {
+      (function (el) {
+        el.addEventListener('click', function () {
+          state.postForm.category = el.getAttribute('data-cat');
+          delete state.postErrors.category;
+          render();
+        });
+      })(catBtnsEls[j]);
+    }
+    root.querySelector('#f-title').addEventListener('input', function (e) {
+      state.postForm.title = e.target.value;
+    });
+    root.querySelector('#f-desc').addEventListener('input', function (e) {
+      state.postForm.description = e.target.value;
+    });
+    root.querySelector('#f-loc').addEventListener('change', function (e) {
+      state.postForm.location = e.target.value;
+    });
+    root.querySelector('#f-contact').addEventListener('input', function (e) {
+      state.postForm.contact = e.target.value;
+    });
+    root.querySelector('#f-submit').addEventListener('click', submitPost);
+  }
+
   /* ── 底部导航 ───────────────────────────────────────────── */
   var TABS = [
     { id: 'home', label: '首页', icon: '\u{1F3E0}' },
@@ -174,12 +300,14 @@ window.App = (function () {
     root.scrollTop = 0;
     if (state.view === 'home') {
       renderHome(root);
+    } else if (state.view === 'post') {
+      renderPost(root);
     } else if (pages[state.view]) {
       pages[state.view](root);
     } else {
       root.innerHTML =
         '<div class="empty"><div class="big">🏗️</div>' +
-        '<p class="t1">' + ({ post: '发布', search: '搜索', mine: '我的', detail: '物品详情' }[state.view] || '页面') + '开发中</p></div>';
+        '<p class="t1">' + ({ search: '搜索', mine: '我的', detail: '物品详情' }[state.view] || '页面') + '开发中</p></div>';
     }
   }
 
