@@ -23,6 +23,7 @@ window.App = (function () {
     postType: 'lost',
     postForm: { category: 'card', title: '', description: '', location: '', contact: '' },
     postErrors: {},
+    newItemId: null,
   };
 
   var pages = {}; // name -> function(rootEl)
@@ -161,7 +162,10 @@ window.App = (function () {
     }
     state.postForm = { category: 'card', title: '', description: '', location: '', contact: '' };
     state.postErrors = {};
-    goTab('home');
+    state.newItemId = r.item.id;
+    state.tab = 'home';
+    state.view = 'success';
+    render();
   }
 
   /* ── 发布页 ─────────────────────────────────────────────── */
@@ -267,6 +271,48 @@ window.App = (function () {
     root.querySelector('#f-submit').addEventListener('click', submitPost);
   }
 
+  /* ── 发布成功页 ─────────────────────────────────────────── */
+  function byId(id) {
+    var all = items();
+    for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
+    return null;
+  }
+
+  function renderSuccess(root) {
+    var item = byId(state.newItemId);
+    if (!item) { goTab('home'); return; }
+    var cat = CATS[item.category];
+
+    root.innerHTML =
+      '<div class="success-wrap">' +
+        '<div class="success-circle ' + item.type + '">✅</div>' +
+        '<h2 class="success-title">发布成功！</h2>' +
+        '<p class="success-sub">你的信息已发布至校园公告栏，祝你尽快找回或送回物品！</p>' +
+        '<div class="card success-card" style="cursor:default">' +
+          '<div class="card-row">' +
+            '<div class="cat-icon ' + item.type + '">' + cat.emoji + '</div>' +
+            '<div class="card-main">' +
+              '<p class="card-title">' + escapeHtml(item.title) + '</p>' +
+              '<div class="badges">' + typeBadge(item.type) +
+                '<span class="card-date">' + fmtDate(item.date) + '</span></div>' +
+              '<p class="card-loc">\u{1F4CD}<span>' + escapeHtml(item.location) + '</span></p>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="success-btns">' +
+          '<button id="s-view" class="btn blue">查看我的发布</button>' +
+          '<button id="s-home" class="btn ghost">返回首页</button>' +
+        '</div>' +
+      '</div>';
+
+    root.querySelector('#s-view').addEventListener('click', function () {
+      openDetail(item.id, 'success');
+    });
+    root.querySelector('#s-home').addEventListener('click', function () {
+      goTab('home');
+    });
+  }
+
   /* ── 底部导航 ───────────────────────────────────────────── */
   var TABS = [
     { id: 'home', label: '首页', icon: '\u{1F3E0}' },
@@ -277,7 +323,9 @@ window.App = (function () {
 
   function renderNav() {
     var nav = document.getElementById('bottomnav');
-    nav.style.display = '';
+    var show = state.view !== 'detail' && state.view !== 'success';
+    nav.style.display = show ? '' : 'none';
+    if (!show) return;
     nav.innerHTML = TABS.map(function (t) {
       var cls = 'navbtn' + (state.tab === t.id ? ' active' : '');
       return '<button class="' + cls + '" data-tab="' + t.id + '">' +
@@ -302,6 +350,8 @@ window.App = (function () {
       renderHome(root);
     } else if (state.view === 'post') {
       renderPost(root);
+    } else if (state.view === 'success') {
+      renderSuccess(root);
     } else if (pages[state.view]) {
       pages[state.view](root);
     } else {
