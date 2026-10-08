@@ -1,18 +1,21 @@
 /* ============================================================
- * app.js —— 页面导航、页面注册与首页渲染
+ * app.js —— 页面导航、首页、发布、发布成功页与共用卡片渲染
  * 通过 window.App 向 js/pages/*.js 暴露接口：
  *   App.registerPage(name, renderFn)  注册页面
  *   App.goTab(tab) / App.openDetail(id, from) / App.goBack()
  *   App.cardHtml(item) / App.bindCards(root)
+ *   App.toggleStatus(id) / App.copyContact(text) / App.toast(msg)
  * ============================================================ */
 window.App = (function () {
   'use strict';
 
   var CATS = Core.CATS;
+  var LOCATIONS = Core.LOCATIONS;
   var escapeHtml = Core.escapeHtml;
   var fmtDate = Core.fmtDate;
 
   var store = Storage.createStore();
+  var clientId = store.getClientId();
 
   /* ── 全局 UI 状态（数据本体永远在 store 里） ────────────── */
   var state = {
@@ -31,8 +34,6 @@ window.App = (function () {
 
   /* ── 数据便捷访问 ───────────────────────────────────────── */
   function items() { return store.load(); }
-  var clientId = store.getClientId();
-
   function byId(id) {
     var all = items();
     for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
@@ -145,8 +146,47 @@ window.App = (function () {
 
   function goBack() {
     var to = state.detailFrom || 'home';
+    if (to === 'success') to = 'home';
     state.view = to;
     if (to === 'home' || to === 'post' || to === 'search' || to === 'mine') state.tab = to;
+    render();
+  }
+
+  /* ── 状态更新（我的发布 / 详情页共用入口） ───────────────── */
+  function toggleStatus(id) {
+    var res = store.toggle(id, clientId);
+    if (!res.ok) {
+      toast(res.error);
+      return;
+    }
+    if (res.item.status === 'resolved') {
+      toast('已标记为「' + Core.resolvedLabel(res.item) + '」，感谢你的更新');
+    } else {
+      toast('信息已重新开启');
+    }
+    render();
+  }
+
+  /* ── 发布提交 ───────────────────────────────────────────── */
+  function submitPost() {
+    var v = Core.validatePost(state.postForm);
+    if (!v.ok) {
+      state.postErrors = v.errors;
+      render();
+      toast('请先完善标红的必填项');
+      return;
+    }
+    var r = Core.createItem(state.postForm, state.postType, clientId);
+    var p = store.add(r.item);
+    if (!p.ok) {
+      toast(p.error);
+      return;
+    }
+    state.newItemId = r.item.id;
+    state.postForm = { category: 'card', title: '', description: '', location: '', contact: '' };
+    state.postErrors = {};
+    state.tab = 'home';
+    state.view = 'success';
     render();
   }
 
@@ -196,31 +236,8 @@ window.App = (function () {
     bindCards(root, 'home');
   }
 
-  /* ── 发布提交 ───────────────────────────────────────────── */
-  function submitPost() {
-    var v = Core.validatePost(state.postForm);
-    if (!v.ok) {
-      state.postErrors = v.errors;
-      render();
-      return;
-    }
-    var r = Core.createItem(state.postForm, state.postType, clientId);
-    var p = store.add(r.item);
-    if (!p.ok) {
-      toast(p.error);
-      return;
-    }
-    state.postForm = { category: 'card', title: '', description: '', location: '', contact: '' };
-    state.postErrors = {};
-    state.newItemId = r.item.id;
-    state.tab = 'home';
-    state.view = 'success';
-    render();
-  }
-
   /* ── 发布页 ─────────────────────────────────────────────── */
   function renderPost(root) {
-    var LOCATIONS = Core.LOCATIONS;
     var f = state.postForm;
     var type = state.postType;
     var errs = state.postErrors;
@@ -322,12 +339,6 @@ window.App = (function () {
   }
 
   /* ── 发布成功页 ─────────────────────────────────────────── */
-  function byId(id) {
-    var all = items();
-    for (var i = 0; i < all.length; i++) if (all[i].id === id) return all[i];
-    return null;
-  }
-
   function renderSuccess(root) {
     var item = byId(state.newItemId);
     if (!item) { goTab('home'); return; }
@@ -396,18 +407,13 @@ window.App = (function () {
     renderNav();
     var root = document.getElementById('view');
     root.scrollTop = 0;
-    if (state.view === 'home') {
-      renderHome(root);
-    } else if (state.view === 'post') {
-      renderPost(root);
-    } else if (state.view === 'success') {
-      renderSuccess(root);
-    } else if (pages[state.view]) {
-      pages[state.view](root);
-    } else {
-      root.innerHTML =
-        '<div class="empty"><div class="big">🏗️</div>' +
-        '<p class="t1">' + ({ search: '搜索', mine: '我的', detail: '物品详情' }[state.view] || '页面') + '开发中</p></div>';
+    switch (state.view) {
+      case 'home': renderHome(root); break;
+      case 'post': renderPost(root); break;
+      case 'success': renderSuccess(root); break;
+      default:
+        if (pages[state.view]) pages[state.view](root);
+        else renderHome(root);
     }
   }
 
@@ -421,12 +427,15 @@ window.App = (function () {
   return {
     registerPage: function (name, fn) { pages[name] = fn; },
     state: state,
+    store: store,
+    clientId: clientId,
     items: items,
     byId: byId,
     isOwn: isOwn,
     goTab: goTab,
     openDetail: openDetail,
     goBack: goBack,
+    toggleStatus: toggleStatus,
     copyContact: copyContact,
     toast: toast,
     render: render,
